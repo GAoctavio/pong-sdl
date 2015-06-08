@@ -10,13 +10,17 @@ extern "C"{
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "shader.h"
-#define ABS(X) ((X)>0)? (X):(-(X))
+#define ABS(X) (((X)>0)? (X):(-(X)))
 #define SIGN(X) ((X)/ABS((X)))
 #define LERP(A,B,T) ( (A) + ( (B) - (A) ) * (T) )
 #define INSIDE(X,A,B) ( (( (X)>=(A) ) && ( (X)<=(B) )) || ( ( (X)>=(B) ) && ( (X)<=(A) ) ) )
 #define SQUARE(X) (((X)*(X)))
-#define MIN(X,Y) ((X)>(Y))? (Y): (X)
-#define MAX(X,Y) ((X)>(Y))? (X): (Y)
+#define MIN(X,Y) (((X)>(Y))? (Y): (X))
+#define MAX(X,Y) (((X)>(Y))? (X): (Y))
+#define PI 3.14159265359f
+constexpr float radians(float degrees){
+    return degrees*(PI/180.0f);
+}
 struct Vertex{
     glm::vec3 position;
 };
@@ -37,7 +41,6 @@ void checkSDLError(int line = -1)
     }
 #endif
 }
-
 struct framebuffer{
     GLuint fbo;
     GLuint texture;
@@ -84,11 +87,15 @@ struct framebuffer{
         return (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
     }
 };
+
 struct Sprite{
   std::vector<Vertex> vertices;
   std::vector<GLuint> indices;
 //  glm::mat4 matrix;
 //  float rotated;
+  Sprite(){
+
+  }
   Sprite(std::vector<Vertex> _vertices,std::vector<GLuint> _indices)
   {
       this->vertices=_vertices;
@@ -151,6 +158,7 @@ struct Sprite{
 
   void Draw(Shader* shader)
   {
+      shader=shader;//NOTE: to stop warning
       glBindVertexArray(this->VAO);
       glDrawElements(GL_TRIANGLES, this->indices.size(), GL_UNSIGNED_INT, 0);
       glBindVertexArray(0);
@@ -193,12 +201,16 @@ struct Entity{
     glm::vec3 position;
     glm::vec3 oldPosition;
     float _rotate;
+    float _oldRotate;
     glm::vec3 _scale;
     glm::mat4 model;
     Order _order[3];
 
     Hitbox hitbox;//object space
 
+    Entity(){
+
+    }
     Entity(Sprite* _sprite){
         this->sprite=_sprite;
         this->position=glm::vec3(0.0f);
@@ -224,6 +236,7 @@ struct Entity{
         this->position.y=pos.y;
     }
     void rotate(float rot){
+        _oldRotate=_rotate;
         _rotate+=rot;
     }
     void scale(glm::vec2 scal){
@@ -350,14 +363,14 @@ struct Entity{
                 break;
         }
         GLint model_uniform= glGetUniformLocation(shader->Program, "model");
-//        switch(model_uniform){
-//            case GL_INVALID_VALUE:
-//                std::cout<<"No existe este valor"<<std::endl;
-//                break;
-//            case GL_INVALID_OPERATION:
-//                std::cout<<"program is not a program object"<<std::endl;
-//                break;
-//        }
+        switch(model_uniform){
+            case GL_INVALID_VALUE:
+                std::cout<<"No existe este valor"<<std::endl;
+                break;
+            case GL_INVALID_OPERATION:
+                std::cout<<"program is not a program object"<<std::endl;
+                break;
+        }
         glUniformMatrix4fv(model_uniform, 1, GL_FALSE, glm::value_ptr(this->model));
         this->sprite->Draw(shader);
     }
@@ -387,18 +400,36 @@ struct CollisionChecker{
     }
 };
 void handleCollision(CollisionChecker collisionChecker){
-    glm::vec3 oldpos,pos,aux;
-    oldpos=collisionChecker.e1->oldPosition;
-    pos=collisionChecker.e1->position;
-    for(float scale=0.9f;scale>0.0f;scale-=0.01f){//@NOTE: if the speed is high enough, it breaks due not enought precision
-        aux=LERP(oldpos,pos,scale);
-        collisionChecker.e1->position={aux.x,aux.y,0.0f};
-        if(!collisionChecker.checkCollision())
-        {
-            return;
+    {
+        glm::vec3 oldpos,pos,aux;
+        oldpos=collisionChecker.e1->oldPosition;
+        pos=collisionChecker.e1->position;
+        for(float scale=0.9f;scale>0.0f;scale-=0.01f){//@NOTE: if the speed is high enough, it breaks due not enought precision
+            aux=LERP(oldpos,pos,scale);
+            collisionChecker.e1->position={aux.x,aux.y,0.0f};
+            if(!collisionChecker.checkCollision())
+            {
+                return;
+            }
         }
+        collisionChecker.e1->position=oldpos;
     }
-    collisionChecker.e1->position=oldpos;
+
+
+    if(collisionChecker.checkCollision()){
+        float oldpos,pos,aux;
+        oldpos=collisionChecker.e1->_oldRotate;
+        pos=collisionChecker.e1->_rotate;
+        for(float scale=0.9f;scale>0.0f;scale-=0.01f){//@NOTE: if the speed is high enough, it breaks due not enought precision
+            aux=LERP(oldpos,pos,scale);
+            collisionChecker.e1->_rotate=aux;
+            if(!collisionChecker.checkCollision())
+            {
+                return;
+            }
+        }
+        collisionChecker.e1->_rotate=oldpos;
+    }
 //    std::cout<<"couldnt handle collision\n";
 //    assert(0);
 }

@@ -1,4 +1,8 @@
-#define WORKING_DIR_FILE(X) ("/home/octavio/random/pong-sdl/pong-sdl/" X)
+
+
+#include<string>
+std::string WORKING_DIR;
+#define WORKING_DIR_FILE(X) ((WORKING_DIR+X).c_str())
 #include <iostream>
 #include <vector>
 extern "C"{
@@ -11,6 +15,9 @@ extern "C"{
 //#include <GLFW/glfw3.h>
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_mixer.h>
+
+#include <unistd.h>//getcwd
 }
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -45,12 +52,12 @@ struct GameObject{
 int screenWidth = (3.0/4.0)*1600, screenHeight = (3.0/4.0)*900;
 int const originalScreenWidth = screenWidth;
 int const originalScreenHeight= screenHeight;
+
 void  do_ball_movement(GameObject& ball,float dt){
     if((ball.speed.x==0.0f && ball.speed.y == 0.0f)){
         Uint32 random=SDL_GetTicks();
-        Uint32 speed=random%1000;
-        if(random & 1) ball.speed={40.0f,1.0f};
-        else ball.speed={-40.0f,-1.0f};
+        if(random & 1) ball.speed={40.0f,-20.0f};
+        else ball.speed={-40.0f,-20.0f};
     }
     ball.move(dt);
 }
@@ -58,75 +65,173 @@ glm::vec2 reflect_vector(glm::vec2 d,glm::vec2 n)//n must be normalized!
 {
     return (d - 2*(glm::dot(d,n))*n);
 }
+/*
+         TOP
+TOPLEFT TOPMIDDLE TOPRIGHT
+        MIDDLE
+BOTTOMLEFT BOTTOMMIDDLE BOTTOMRIGHT
+        BOTTOM
+*/
+enum digit_flags{
+    DIGIT_TOP         = 1,
+    DIGIT_MIDDLE      = 2,
+    DIGIT_BOTTOM      = 4,
+    DIGIT_TOPLEFT     = 8,
+    DIGIT_TOPRIGHT    = 16,
+    DIGIT_BOTTOMLEFT  = 32,
+    DIGIT_BOTTOMRIGHT = 64,
+    DIGIT_TOPLEFT_MIDDLERIGHT = 128,
+    DIGIT_TOPRIGHT_MIDDLELEFT = 256,
+    DIGIT_BOTTOMLEFT_MIDDLERIGHT = 512,
+    DIGIT_BOTTOMRIGHT_MIDDLELEFT = 1024,
+    DIGIT_TOPLEFT_BOTTOMRIGHT=2048,
+    DIGIT_TOPRIGHT_BOTTOMLEFT=4096,
+    DIGIT_TOPLEFT_MIDDLE=8192,
+    DIGIT_TOPRIGHT_MIDDLE=16384,
+    DIGIT_BOTTOMLEFT_MIDDLE=32768,
+    DIGIT_BOTTOMRIGHT_MIDDLE=65536,
+    DIGIT_TOPMIDDLE=131072,
+    DIGIT_BOTTOMMIDDLE=262144
+};
 
-bool firstcall=true;
-void drawdigit(unsigned char n,Shader* shader,glm::vec2 pos=glm::vec2(0.0f,0.0f),glm::vec2 scale=glm::vec2(1.0f,1.0f)){
+bool drawdigit_firstcall=true;
+void drawdigit(unsigned char n,Shader* shader,glm::vec2 pos=glm::vec2(0.0f,0.0f),glm::vec2 scale=glm::vec2(1.0f,1.0f),
+               int flags=DIGIT_TOPLEFT_BOTTOMRIGHT|DIGIT_TOP|DIGIT_TOPLEFT|DIGIT_TOPRIGHT|DIGIT_MIDDLE
+                        |DIGIT_BOTTOMLEFT|DIGIT_BOTTOMRIGHT|DIGIT_BOTTOM){
     static GLfloat nummatrix[] = {
-        //top Horizontal bar
-      -0.5f, 0.5f, 0.0f,
-      -0.5f, 0.4f, 0.0f,
-       0.5f, 0.5f, 0.0f,
-       0.5f, 0.4f, 0.0f,
-       //middle horizontal bar
-      -0.5f, 0.05f, 0.0f,
-      -0.5f, -0.05f, 0.0f,
-       0.5f, 0.05f, 0.0f,
-       0.5f,-0.05f, 0.0f,
-       //bottom horizontal bar
-      -0.5f, -0.5f, 0.0f,
-      -0.5f, -0.4f, 0.0f,
-       0.5f, -0.5f, 0.0f,
-       0.5f, -0.4f, 0.0f,
-       //upleft vertical bar
-       -0.5f, 0.5f, 0.0f,
-       -0.4f, 0.5f, 0.0f,
-       -0.5f, 0.0f, 0.0f,
-       -0.4f, 0.0f, 0.0f,
-       //upright vertical bar
-        0.5f, 0.5f, 0.0f,
-        0.4f, 0.5f, 0.0f,
-        0.5f, 0.0f, 0.0f,
-        0.4f, 0.0f, 0.0f,
-        //bottom left vertical bar
-        -0.5f, -0.5f, 0.0f,
-        -0.4f, -0.5f, 0.0f,
-        -0.5f, -0.0f, 0.0f,
-        -0.4f, -0.0f, 0.0f,
-        //bottom right vertical bar
-        0.5f, -0.5f, 0.0f,
-        0.4f, -0.5f, 0.0f,
-        0.5f, -0.0f, 0.0f,
-        0.4f, -0.0f, 0.0f,
+        -0.5f,0.5f,0.0f,//0
+        0.5f,0.5f,0.0f,//1
+        -0.5f,0.4f,0.0f,//2
+        0.5f,0.4f,0.0f,//3
+        -0.5f,0.05f,0.0f,//4
+        0.5f,0.05f,0.0f,//5
+        -0.5f,-0.05f,0.0f,//6
+        0.5f,-0.05f,0.0f,//7
+        -0.5f,-0.4f,0.0f,//8
+        0.5f,-0.4f,0.0f,//9
+        -0.5f,-0.5f,0.0f,//10
+        0.5f,-0.5f,0.0f,//11
+        -0.4f,0.5f,0.0f,//12
+        0.4f,0.5f,0.0f,//13
+        -0.5f,0.0f,0.0f,//14
+        -0.4f,0.0f,0.0f,//15
+        0.4f,0.0f,0.0f,//16
+        0.5f,0.0f,0.0f,//17
+        -0.4f,-0.5f,0.0f,//18
+        0.4f,-0.5f,0.0f,//19
+        -0.4f,0.05f,0.0f,//20
+        0.4f,0.05f,0.0f,//21
+        -0.4f,-0.05f,0.0f,//22
+        0.4f,-0.05f,0.0f,//23
+        -0.05f,0.05f,0.0f,//24
+        0.05f,0.05f,0.0f,//25
+        -0.05f,-0.05f,0.0f,//26
+        0.05f,-0.05f,0.0f,//27
+        -0.05f,0.5f,0.0f,//28
+        0.05f,0.5f,0.0f,//29
+        -0.05f,-0.5f,0.0f,//30
+        0.05f,-0.5f,0.0f,//31
+        -0.05f,0.0f,0.0f,//32
+        0.05f,0.0f,0.0f,//33
 
     };
-    static GLuint upleft_indices[]{
-        12, 13, 14,
-        15, 14, 13
+    static GLuint topleft_indices[]{
+        0,12,14,
+        14,12,15
     };
-    static GLuint upright_indices[]{
-        16, 17, 18,
-        17, 18, 19
+    static GLuint topright_indices[]{
+        13,1,16,
+        16,1,17
     };
     static GLuint bottomleft_indices[]{
-        20, 21, 22,
-        23, 21, 22
+        14,15,10,
+        10,15,18
     };
     static GLuint bottomright_indices[]{
-        24, 25, 26,
-        27, 26, 25
+        16,17,19,
+        19,17,11
     };
     static GLuint top_indices[]{
-        0, 1, 2,
-        3, 2 ,1
+        0,1,2,
+        2,1,3
     };
     static GLuint middle_indices[]{
-       4, 5, 6,
-       7, 6, 5
+        4,5,6,
+        6,5,7
     };
     static GLuint bottom_indices[]{
-       8, 9, 10,
-       11, 10, 9
+        8,9,10,
+        10,9,11
     };
+    static GLuint topleft_to_middleright_indices[]{
+        0,12,2,
+        2,12,5,
+        2,5,23,
+        23,5,7
+    };
+    static GLuint topright_to_middleleft_indices[]{
+        13,1,3,
+        13,3,4,
+        3,4,22,
+        4,6,22
+    };
+    static GLuint bottomleft_to_middleright_indices[]{
+        21,5,7,
+        21,7,8,
+        18,8,7,
+        8,10,18
+    };
+    static GLuint bottomright_to_middleleft_indices[]{
+        4,20,6,
+        20,6,9,
+        6,9,19,
+        9,19,11
+    };
+    static GLuint topleft_to_bottomright_indices[]{
+        0,12,2,
+        2,12,9,
+        2,9,19,
+        9,19,11
+    };
+    static GLuint topright_to_bottomleft_indices[]{
+        13,1,3,
+        13,3,8,
+        3,8,18,
+        8,10,18
+    };
+    static GLuint topleft_to_middle_indices[]{
+        0,12,2,
+        12,2,25,
+        2,25,26,
+        25,26,27
+    };
+    static GLuint topright_to_middle_indices[]{
+        13,1,3,
+        13,3,24,
+        3,24,27,
+        24,26,27
+    };
+    static GLuint bottomleft_to_middle_indices[]{
+        24,25,27,
+        24,27,8,
+        27,8,18,
+        8,10,18
+    };
+    static GLuint bottomright_to_middle_indices[]{
+        24,25,26,
+        25,26,9,
+        26,9,19,
+        9,19,11
+    };
+    static GLuint topmiddle_indices[]{
+        28,29,33,
+        28,32,33
+    };
+    static GLuint bottommiddle_indices[]{
+        32,33,31,
+        32,30,31
+    };
+
     static std::vector<Vertex> vertices(
                                         (Vertex*)nummatrix,
                                         ((Vertex*)nummatrix) + (sizeof(nummatrix)/sizeof(Vertex))
@@ -134,184 +239,186 @@ void drawdigit(unsigned char n,Shader* shader,glm::vec2 pos=glm::vec2(0.0f,0.0f)
     static std::vector<GLuint> indices;
     indices.reserve(6);
 
-    if(firstcall)
-    {
-        indices.clear();
-        for(unsigned int i=0;i<(sizeof(upright_indices)/sizeof(upright_indices[0]));i++)
-        {
-            indices.push_back(upright_indices[i]);
-        }
-    }
-    static Sprite sprite_upright(vertices,indices);
-    static Entity upright(&sprite_upright);
+#define createdigit(NAME) \
+    if(drawdigit_firstcall)\
+    {\
+        indices.clear();\
+        for(unsigned int i=0;i<(sizeof(NAME##_indices)/sizeof(NAME##_indices[0]));i++)\
+            indices.push_back(NAME##_indices[i]);\
+    }\
+    static Sprite sprite_##NAME(vertices,indices);\
+    static Entity NAME(&sprite_##NAME);
 
-    if(firstcall)
-    {
-        indices.clear();
-        for(unsigned int i=0;i<(sizeof(upleft_indices)/sizeof(upleft_indices[0]));i++)
-        {
-            indices.push_back(upleft_indices[i]);
-        }
-    }
-    static Sprite sprite_upleft(vertices,indices);
-    static Entity upleft(&sprite_upleft);
+    createdigit(topright);
+    createdigit(topleft);
+    createdigit(top);
+    createdigit(middle);
+    createdigit(bottomleft);
+    createdigit(bottomright);
+    createdigit(bottom);
+    createdigit(topright_to_middleleft);
+    createdigit(topleft_to_middleright);
+    createdigit(bottomleft_to_middleright);
+    createdigit(bottomright_to_middleleft);
+    createdigit(topleft_to_bottomright);
+    createdigit(topright_to_bottomleft);
 
+    createdigit(topleft_to_middle);
+    createdigit(topright_to_middle);
+    createdigit(bottomleft_to_middle);
+    createdigit(bottomright_to_middle);
+    createdigit(topmiddle);
+    createdigit(bottommiddle);
+#undef createdigit
+#define set_and_draw(NAME)\
+    NAME.setPos(pos);\
+    NAME.scale(scale);\
+    NAME.draw(shader);
 
-    if(firstcall)
-    {
-        indices.clear();
-        for(unsigned int i=0;i<(sizeof(bottomleft_indices)/sizeof(bottomleft_indices[0]));i++){
-            indices.push_back(bottomleft_indices[i]);
-        }
-    }
-    static Sprite sprite_bottomleft(vertices,indices);
-    static Entity bottomleft(&sprite_bottomleft);
+    drawdigit_firstcall=false;
 
-
-    if(firstcall)
-    {
-        indices.clear();
-        for(unsigned int i=0;i<(sizeof(bottomright_indices)/sizeof(bottomright_indices[0]));i++){
-            indices.push_back(bottomright_indices[i]);
-        }
-    }
-    static Sprite sprite_bottomright(vertices,indices);
-    static Entity bottomright(&sprite_bottomright);
-
-
-    if(firstcall)
-    {
-        indices.clear();
-        for(unsigned int i=0;i<(sizeof(top_indices)/sizeof(top_indices[0]));i++){
-            indices.push_back(top_indices[i]);
-        }
-    }
-    static Sprite sprite_top(vertices,indices);
-    static Entity top(&sprite_top);
-
-
-    if(firstcall)
-    {
-        indices.clear();
-        for(unsigned int i=0;i<(sizeof(middle_indices)/sizeof(middle_indices[0]));i++){
-            indices.push_back(middle_indices[i]);
-        }
-    }
-    static Sprite sprite_middle(vertices,indices);
-    static Entity middle(&sprite_middle);
-
-    if(firstcall)
-    {
-        indices.clear();
-        for(unsigned int i=0;i<(sizeof(bottom_indices)/sizeof(bottom_indices[0]));i++){
-            indices.push_back(bottom_indices[i]);
-        }
-    }
-    static Sprite sprite_bottom(vertices,indices);
-    static Entity bottom(&sprite_bottom);
-
-
-    firstcall=false;
-    upright.setPos(pos);
-    upleft.setPos(pos);
-    bottomleft.setPos(pos);
-    bottomright.setPos(pos);
-    top.setPos(pos);
-    middle.setPos(pos);
-    bottom.setPos(pos);
-
-    upright.scale(scale);
-    upleft.scale(scale);
-    bottomleft.scale(scale);
-    bottomright.scale(scale);
-    top.scale(scale);
-    middle.scale(scale);
-    bottom.scale(scale);
     switch(n)
     {//giant switch for every digit
         case 0:
-            top.draw(shader);
-            upleft.draw(shader);
-            upright.draw(shader);
-            bottomleft.draw(shader);
-            bottomright.draw(shader);
-            bottom.draw(shader);
+            set_and_draw(top);
+            set_and_draw(topleft);
+            set_and_draw(topright);
+            set_and_draw(bottomleft);
+            set_and_draw(bottomright);
+            set_and_draw(bottom);
         case 1:
-            upright.draw(shader);
-            bottomright.draw(shader);
+            set_and_draw(topright);
+            set_and_draw(bottomright);
             break;
         case 2:
-            top.draw(shader);
-            upright.draw(shader);
-            middle.draw(shader);
-            bottomleft.draw(shader);
-            bottom.draw(shader);
+            set_and_draw(top);
+            set_and_draw(topright);
+            set_and_draw(middle);
+            set_and_draw(bottomleft);
+            set_and_draw(bottom);
             break;
         case 3:
-            top.draw(shader);
-            upright.draw(shader);
-            middle.draw(shader);
-            bottomright.draw(shader);
-            bottom.draw(shader);
+            set_and_draw(top);
+            set_and_draw(topright);
+            set_and_draw(middle);
+            set_and_draw(bottomright);
+            set_and_draw(bottom);
             break;
         case 4:
-            upleft.draw(shader);
-            upright.draw(shader);
-            middle.draw(shader);
-            bottomright.draw(shader);
+            set_and_draw(topleft);
+            set_and_draw(topright);
+            set_and_draw(middle);
+            set_and_draw(bottomright);
             break;
         case 5:
-            top.draw(shader);
-            upleft.draw(shader);
-            middle.draw(shader);
-            bottomright.draw(shader);
-            bottom.draw(shader);
+            set_and_draw(top);
+            set_and_draw(topleft);
+            set_and_draw(middle);
+            set_and_draw(bottomright);
+            set_and_draw(bottom);
             break;
         case 6:
-            top.draw(shader);
-            upleft.draw(shader);
-            middle.draw(shader);
-            bottomleft.draw(shader);
-            bottomright.draw(shader);
-            bottom.draw(shader);
+            set_and_draw(top);
+            set_and_draw(topleft);
+            set_and_draw(middle);
+            set_and_draw(bottomleft);
+            set_and_draw(bottomright);
+            set_and_draw(bottom);
             break;
         case 7:
-            top.draw(shader);
-            upright.draw(shader);
-            middle.draw(shader);
-            bottomright.draw(shader);
+            set_and_draw(top);
+            set_and_draw(topright);
+            set_and_draw(middle);
+            set_and_draw(bottomright);
+            break;
+
+        case 8:
+            set_and_draw(topright);
+            set_and_draw(topleft);
+            set_and_draw(bottomleft);
+            set_and_draw(bottomright);
+            set_and_draw(top);
+            set_and_draw(middle);
+            set_and_draw(bottom);
             break;
         case 9:
-            top.draw(shader);
-            upleft.draw(shader);
-            upright.draw(shader);
-            middle.draw(shader);
-            bottomright.draw(shader);
-            bottom.draw(shader);
+            set_and_draw(top);
+            set_and_draw(topleft);
+            set_and_draw(topright);
+            set_and_draw(middle);
+            set_and_draw(bottomright);
+            set_and_draw(bottom);
             break;
-        default://case 8
-            upright.draw(shader);
-            upleft.draw(shader);
-            bottomleft.draw(shader);
-            bottomright.draw(shader);
-            top.draw(shader);
-            middle.draw(shader);
-            bottom.draw(shader);
-            break;
+        default:
+            if(flags & DIGIT_TOP){
+                set_and_draw(top);}
+            if(flags & DIGIT_MIDDLE){
+                set_and_draw(middle);}
+            if(flags & DIGIT_BOTTOM){
+                set_and_draw(bottom);}
+            if(flags & DIGIT_TOPLEFT){
+                set_and_draw(topleft);}
+            if(flags & DIGIT_TOPRIGHT){
+                set_and_draw(topright);}
+            if(flags & DIGIT_BOTTOMLEFT){
+                set_and_draw(bottomleft);}
+            if(flags & DIGIT_BOTTOMRIGHT){
+                set_and_draw(bottomright);}
+            if(flags & DIGIT_TOPLEFT_MIDDLERIGHT){
+                set_and_draw(topleft_to_middleright);}
+            if(flags & DIGIT_TOPRIGHT_MIDDLELEFT){
+                set_and_draw(topright_to_middleleft);}
+            if(flags & DIGIT_BOTTOMLEFT_MIDDLERIGHT){
+                set_and_draw(bottomleft_to_middleright);}
+            if(flags & DIGIT_BOTTOMRIGHT_MIDDLELEFT){
+                set_and_draw(bottomright_to_middleleft);}
+            if(flags & DIGIT_TOPLEFT_BOTTOMRIGHT){
+                set_and_draw(topleft_to_bottomright);}
+            if(flags & DIGIT_TOPRIGHT_BOTTOMLEFT){
+                set_and_draw(topright_to_bottomleft);}
+            if(flags & DIGIT_TOPLEFT_MIDDLE){
+                set_and_draw(topleft_to_middle);}
+            if(flags & DIGIT_TOPRIGHT_MIDDLE){
+                set_and_draw(topright_to_middle);}
+            if(flags & DIGIT_BOTTOMLEFT_MIDDLE){
+                set_and_draw(bottomleft_to_middle);}
+            if(flags & DIGIT_BOTTOMRIGHT_MIDDLE){
+                set_and_draw(bottomright_to_middle);}
+            if(flags & DIGIT_TOPMIDDLE){
+                set_and_draw(topmiddle);
+            }
+            if(flags & DIGIT_BOTTOMMIDDLE){
+                set_and_draw(bottommiddle);
+            }
     }
-
-
-
+#undef set_and_draw
 }
 template<typename T>
 inline void destructor(T a){
     a.T::~T();
 }
-int main(int argc, char *argv[])
+
+
+
+#define DESTRUCTOR(A) destructor<decltype(A)>((A))
+int main()
 {
+    char cdirectory[2048];
+    getcwd(cdirectory,2048);
+    if(cdirectory[0]=='\0'){
+        std::cout<<"coudlnt get working dir"<<std::endl;
+        return 1;
+    }
+    WORKING_DIR=cdirectory;
+    WORKING_DIR=WORKING_DIR.substr(0,WORKING_DIR.find_last_of("/\\"));
+    WORKING_DIR+="/pong-sdl/";//HACK: wont work on windows
+
     SDL_Window *mainwindow; /* Our window handle */
     SDL_GLContext maincontext; /* Our opengl context handle */
-    if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
+    Mix_Chunk *pong = NULL;
+    Mix_Chunk *pong2 = NULL;
+    Mix_Chunk *pong3 = NULL;
+    if( SDL_Init( SDL_INIT_VIDEO| SDL_INIT_AUDIO ) < 0 )
     {
         sdldie("SDL could not initialize! SDL Error: %s\n");
     }
@@ -358,10 +465,29 @@ int main(int argc, char *argv[])
                 screenHeight=(3.0f/4.0f)*current.h;
                 (*(int*)(&originalScreenHeight))=screenHeight;
                 (*(int*)(&originalScreenWidth))=screenWidth;
-
-                //glViewport(0, 0, screenWidth, screenHeight);
             }
         }
+    }
+    //Initialize SDL_mixer
+    if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, 2, 2048 ) < 0 ) {
+        std::cout<<"SDL_mixer could not initialize! SDL_mixer Error: "<<Mix_GetError();
+        return 1;
+    }
+     //Load sound effects
+    pong = Mix_LoadWAV(WORKING_DIR_FILE("pong.wav"));
+    if( pong == NULL ) {
+        std::cout<< "Failed to load scratch sound effect! SDL_mixer Error: "<<Mix_GetError();
+        return 1;
+    }
+    pong2 = Mix_LoadWAV(WORKING_DIR_FILE("pong2.wav"));
+    if( pong2 == NULL ) {
+        std::cout<< "Failed to load scratch sound effect! SDL_mixer Error: "<<Mix_GetError();
+        return 1;
+    }
+    pong3 = Mix_LoadWAV(WORKING_DIR_FILE("pong3.wav"));
+    if( pong3 == NULL ) {
+        std::cout<< "Failed to load scratch sound effect! SDL_mixer Error: "<<Mix_GetError();
+        return 1;
     }
 
     glEnable(GL_DEPTH_TEST);
@@ -453,7 +579,7 @@ int main(int argc, char *argv[])
     {
         player1.entity.setPos({-0.95f,0.0f});
         player2.entity.setPos({0.95f,0.0f});
-        ball.entity.setPos({0.0f,0.0f});
+        ball.entity.setPos({0.0f,8.0f});
 
         roof.setPos({-1.0f,1.10f});
         floor.setPos({-1.0f,-1.10f});
@@ -465,10 +591,11 @@ int main(int argc, char *argv[])
         leftwall.entity.scale({0.025f,2.0f});
         rightwall.entity.scale({0.025f,2.0f});
 
-        player1.entity.scale({0.025f, 0.5f});
-        player2.entity.scale({0.025f, 0.5f});
+        player1.entity.scale({0.025f, 0.49f});
+        player2.entity.scale({0.025f, 0.49f});
         ball.entity.scale({0.0625f,0.0625f});
         ball.entity.order(SCALE,ROTATE,TRANSLATE);
+
 
     }
 
@@ -503,7 +630,6 @@ int main(int argc, char *argv[])
     framebuffer fb(originalScreenWidth,originalScreenHeight);
     Shader shader(WORKING_DIR_FILE("shader.vert"),WORKING_DIR_FILE("shader.frag"));
     Shader fb_shader(WORKING_DIR_FILE("framebuffer_shader.vert"),WORKING_DIR_FILE("framebuffer_shader.frag"));
-
     while(!quit)
     {
         SDL_PumpEvents();
@@ -519,7 +645,6 @@ int main(int argc, char *argv[])
             const Uint8 *keystates =                                     SDL_GetKeyboardState( NULL );
             quit                   = keystates[SDL_GetScancodeFromKey(SDLK_q)] || SDL_QuitRequested();
             started                =         started || keystates[SDL_GetScancodeFromKey(SDLK_SPACE)];
-
             if(started){
                 if(keystates[SDL_GetScancodeFromKey(SDLK_w   )])
                 {
@@ -541,10 +666,9 @@ int main(int argc, char *argv[])
                     player2.move(-dt );
                     p2_speed_gain={ 0.0f ,-1.0f };
                 }
-                //@ERROR: if we rotate into a collision, handleCollision wont work
                 if(keystates[SDL_GetScancodeFromKey(SDLK_j)])
                 {
-                    player1.entity.rotate(45.0f );
+                    player1.entity.rotate(15.0f );
                 }
 
                 do_ball_movement(ball,dt);
@@ -564,41 +688,44 @@ int main(int argc, char *argv[])
             glm::vec3 oldpos=ball.entity.oldPosition;
             if(ball_floor.checkCollision()){
                 handleCollision(ball_floor);
-                //reflect_ball(ball,);
                 ball.speed=glm::normalize(glm::reflect(glm::vec2(pos.x-oldpos.x,pos.y-oldpos.y),glm::vec2(0.0f,1.0f)))*glm::length(ball.speed);
+                Mix_PlayChannel( -1, pong2, 0 );
             }
             if(ball_roof.checkCollision()){
                 handleCollision(ball_roof);
-                //reflect_ball(ball,);
                 ball.speed=glm::normalize(glm::reflect(glm::vec2(pos.x-oldpos.x,pos.y-oldpos.y),glm::vec2(0.0f,-1.0f)))*glm::length(ball.speed);
+                Mix_PlayChannel( -1, pong2, 0 );
             }
             if(ball_p1.checkCollision()){
                 handleCollision(ball_p1);
-                //reflect_ball(ball,);
                 ball.speed=glm::normalize(glm::reflect(glm::vec2(pos.x-oldpos.x,pos.y-oldpos.y),glm::vec2(1.0f,0.0f)) + p1_speed_gain)
                         *
                         (glm::length(ball.speed)+glm::length(p1_speed_gain));
+                Mix_PlayChannel( -1, pong, 0 );
             }
             if(ball_p2.checkCollision()){
                 handleCollision(ball_p2);
-                //reflect_ball(ball,);
                 ball.speed=glm::normalize(glm::reflect(glm::vec2(pos.x-oldpos.x,pos.y-oldpos.y),glm::vec2(-1.0f,0.0f)) + p2_speed_gain)
                         *
                         (glm::length(ball.speed)+glm::length(p2_speed_gain));
+                Mix_PlayChannel( -1, pong, 0 );
             }
-//            if(ABS(ball.speed.y)>50.0f){
-//                ball.speed.x+=SIGN(ball.speed.x)*(ABS(ball.speed.y)-ABS(50.0f));
-//                ball.speed.y=SIGN(ball.speed.y)*40.0f;
-//            }
+
             if(ball_leftwall.checkCollision()){
                 points_p2++;
-                ball.entity.setPos({0.0f,0.0f});
+                ball.entity.setPos({0.0f,8.0f});//scale adjusted due the order it uses...
                 ball.speed={0.0f,0.0f};
+                Mix_PlayChannel( -1, pong3, 0 );
             }
             if(ball_rightwall.checkCollision()){
                 points_p1++;
-                ball.entity.setPos({0.0f,0.0f});
+                ball.entity.setPos({0.0f,8.0f});
                 ball.speed={0.0f,0.0f};
+                Mix_PlayChannel( -1, pong3, 0 );
+            }
+            if(((ball.speed.y/ball.speed.x)>3.0f) || ((ball.speed.y/ball.speed.x)<-3.0f)){
+                ball.speed.y/=2.0f;
+                ball.speed.x*=4.0f;
             }
         }
         if(i==100){
@@ -610,57 +737,71 @@ int main(int argc, char *argv[])
         }
         i+=1;
         shader.Use();
-          fb.bind();
-//        glBindFramebuffer(GL_FRAMEBUFFER,fbo);
-            glViewport(0,0,originalScreenWidth,originalScreenHeight);
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-            glEnable(GL_DEPTH_TEST);
-            glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+            fb.bind();
+                glViewport(0,0,originalScreenWidth,originalScreenHeight);
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                glEnable(GL_DEPTH_TEST);
+                glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+                glm::mat4 projection;//= glm::ortho(-1.0f,1.0f,-1.0f,1.0f,0.0f,1.0f);
+                GLint projection_uniform=glGetUniformLocation(shader.Program, "projection");
+                glUniformMatrix4fv(projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
 
 
-            float aspectRatio=(float)screenWidth/(float)screenHeight;
-            glm::mat4 projection;//= glm::ortho(-1.0f,1.0f,-1.0f,1.0f,0.0f,1.0f);
-            GLint projection_uniform=glGetUniformLocation(shader.Program, "projection");
-            switch(projection_uniform){
-                case GL_INVALID_VALUE:
-                    std::cout<<"No existe este valor"<<std::endl;
-                    break;
-                case GL_INVALID_OPERATION:
-                    std::cout<<"program is not a program object"<<std::endl;
-                    break;
-            }
-            glUniformMatrix4fv(projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
+                glm::vec2 position;
+                position=glm::vec2(-3.0f*1.06255f*0.125f,0.0f);
+                if(points_p1>=5 || points_p2>=5){
+                    drawdigit(-1,&shader,position,{0.125f,0.125f},DIGIT_TOP|DIGIT_MIDDLE|DIGIT_TOPLEFT|DIGIT_TOPRIGHT|DIGIT_BOTTOMLEFT);
+                    position+=glm::vec2(1.0625f*0.125f,0.0f);
+                    drawdigit((points_p1>=5)?1:2,&shader,position,{0.125f,0.125f});
+                    position+=glm::vec2(1.0625f*0.125f,0.0f);
+                    position+=glm::vec2(1.0625f*0.125f,0.0f);
+                    drawdigit(-1,&shader,position,{0.125f,0.125f},DIGIT_TOPLEFT |DIGIT_BOTTOMLEFT |DIGIT_BOTTOMLEFT_MIDDLE|
+                                                                  DIGIT_TOPRIGHT|DIGIT_BOTTOMRIGHT|DIGIT_BOTTOMRIGHT_MIDDLE);
+                    position+=glm::vec2(1.0625f*0.125f,0.0f);
+                    drawdigit(-1,&shader,position,{0.125f,0.125f},DIGIT_TOPMIDDLE|DIGIT_BOTTOMMIDDLE);
+                    position+=glm::vec2(1.0625f*0.125f,0.0f);
+                    drawdigit(-1,&shader,position,{0.125f,0.125f},DIGIT_BOTTOMLEFT |DIGIT_TOPLEFT|DIGIT_TOPLEFT_BOTTOMRIGHT|
+                                                                  DIGIT_BOTTOMRIGHT|DIGIT_TOPRIGHT);
+                    position+=glm::vec2(1.0625f*0.125f,0.0f);
+                    drawdigit(5,&shader,position,{0.125f,0.125f});
+                    started=false;
+                }
 
-            player1.entity.draw(&shader);
-            player2.entity.draw(&shader);
-            ball.entity.draw(&shader);
-            roof.draw(&shader);
-            floor.draw(&shader);
-            leftwall.entity.draw(&shader);
-            rightwall.entity.draw(&shader);
+                player1.entity.draw(&shader);
+                player2.entity.draw(&shader);
+                if(started) ball.entity.draw(&shader);
+                roof.draw(&shader);
+                floor.draw(&shader);
+                leftwall.entity.draw(&shader);
+                rightwall.entity.draw(&shader);
 
-            unsigned int aux=points_p1;
-            glm::vec2 position(0.25f,0.5f);
-            //NOTE: when one of the points hits 20 I should put a you win screen
-            first_point_p1=points_p1? false:true;
-            while((aux/10) || (aux%10) || first_point_p1){
-                drawdigit(aux%10,&shader,position,{0.125f,0.125f});
-                position.x-=1.5f*0.125f;
-                aux=aux/10;
-                first_point_p1=false;//endless loop if I dont
-            }
 
-            aux=points_p2;
-            position={-0.25f,0.5f};
-            first_point_p2=points_p2? false:true;
-            while((aux/10) || (aux%10) || first_point_p2){
-                drawdigit(aux%10,&shader,position,{0.125f,0.125f});
-                position.x-=1.5f*0.125f;
-                aux=aux/10;
-                first_point_p2=false;//endless loop if I dont
-            }
-           fb.unbind();
-//         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+                unsigned int aux=points_p2;
+                position=glm::vec2(0.25f,0.5f);
+                //NOTE: when one of the points hits 20 I should put a you win screen
+                first_point_p2=points_p2? false:true;
+                while((aux/10) || (aux%10) || first_point_p2){
+                    drawdigit(aux%10,&shader,position,{0.125f,0.125f});
+                    position.x-=1.5f*0.125f;
+                    aux=aux/10;
+                    first_point_p2=false;//endless loop if I dont
+                }
+
+                aux=points_p1;
+                position={-0.25f,0.5f};
+                first_point_p1=points_p1? false:true;
+                while((aux/10) || (aux%10) || first_point_p1){
+                    drawdigit(aux%10,&shader,position,{0.125f,0.125f});
+                    position.x-=1.5f*0.125f;
+                    aux=aux/10;
+                    first_point_p1=false;
+                }
+
+
+            fb.unbind();
         SDL_GetWindowSize(mainwindow,&screenWidth,&screenHeight);
         glViewport(0,0,screenWidth,screenHeight);
         glClearColor(0.0f, 0.0f, 0.1f, 1.0f);
@@ -668,17 +809,13 @@ int main(int argc, char *argv[])
         glDisable(GL_DEPTH_TEST);
         fb_shader.Use();
             glm::mat4 screenscaler;
-            screenscaler = glm::perspective(glm::radians(59.0f),aspectRatio,0.1f,1.0f);
+            float aspectRatio=(float)screenWidth/(float)screenHeight;
+            float inverseAspectRatio=(float)screenHeight/(float)screenWidth;
+            if(aspectRatio>1.0f)
+            screenscaler = glm::perspective(radians(59.2f),aspectRatio,0.1f,1.0f);
+            else
+            screenscaler = glm::perspective(radians(59.2f),inverseAspectRatio,0.1f,1.0f);
             GLint model_uniform=glGetUniformLocation(fb_shader.Program, "model");
-            switch(model_uniform)
-            {
-                case GL_INVALID_VALUE:
-                    std::cout<<"No existe este valor"<<std::endl;
-                    break;
-                case GL_INVALID_OPERATION:
-                    std::cout<<"program is not a program object"<<std::endl;
-                    break;
-            }
             glUniformMatrix4fv(model_uniform, 1, GL_FALSE, glm::value_ptr(screenscaler));
 
             glBindVertexArray(quadVAO);//should scale the scale to the % of resolution
@@ -691,11 +828,19 @@ int main(int argc, char *argv[])
 
         SDL_Delay(1);
         SDL_GL_SwapWindow(mainwindow);
+        if(points_p1>=5 || points_p2>=5){
+            points_p1=0;
+            points_p2=0;
+            ball.speed={0.0f,0.0f};
+            SDL_Delay(3000);
+        }
     }
-
-    destructor<framebuffer>(fb);
-    destructor<Shader>(shader);
-    destructor<Shader>(shader);
+    DESTRUCTOR(fb);
+    DESTRUCTOR(shader);
+    DESTRUCTOR(fb_shader);
+    Mix_FreeChunk(pong);
+    Mix_FreeChunk(pong2);
+    Mix_FreeChunk(pong3);
     SDL_GL_DeleteContext(maincontext);
     SDL_DestroyWindow(mainwindow);
     SDL_Quit();

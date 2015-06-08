@@ -6,14 +6,12 @@
 #include <sstream>
 #include <iostream>
 
-#define WORKING_DIR_FILE(X) ("/home/octavio/random/pong-sdl/pong-sdl/" X)
 extern "C"{
 // GLEW
 #define GLEW_STATIC
 #include <GL/glew.h>
 #include <GL/glu.h>
 }
-
 class Shader
 {
 public:
@@ -26,5 +24,6 @@ public:
         void Use();
         ~Shader();
 };
+
 #endif // SHADER
 
