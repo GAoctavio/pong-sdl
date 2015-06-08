@@ -411,8 +411,13 @@ int main()
     }
     WORKING_DIR=cdirectory;
     WORKING_DIR=WORKING_DIR.substr(0,WORKING_DIR.find_last_of("/\\"));
-    WORKING_DIR+="/pong-sdl/";//HACK: wont work on windows
-
+    WORKING_DIR=WORKING_DIR.substr(0,WORKING_DIR.find_last_of("/\\"));
+#ifdef __gnu_linux__
+    WORKING_DIR+="/";
+#endif
+#ifdef __WIN32
+    WORKING_DIR+="\\";
+#endif
     SDL_Window *mainwindow; /* Our window handle */
     SDL_GLContext maincontext; /* Our opengl context handle */
     Mix_Chunk *pong = NULL;
@@ -474,17 +479,17 @@ int main()
         return 1;
     }
      //Load sound effects
-    pong = Mix_LoadWAV(WORKING_DIR_FILE("pong.wav"));
+    pong = Mix_LoadWAV(WORKING_DIR_FILE("assets/sounds/pong.wav"));
     if( pong == NULL ) {
         std::cout<< "Failed to load scratch sound effect! SDL_mixer Error: "<<Mix_GetError();
         return 1;
     }
-    pong2 = Mix_LoadWAV(WORKING_DIR_FILE("pong2.wav"));
+    pong2 = Mix_LoadWAV(WORKING_DIR_FILE("assets/sounds/pong2.wav"));
     if( pong2 == NULL ) {
         std::cout<< "Failed to load scratch sound effect! SDL_mixer Error: "<<Mix_GetError();
         return 1;
     }
-    pong3 = Mix_LoadWAV(WORKING_DIR_FILE("pong3.wav"));
+    pong3 = Mix_LoadWAV(WORKING_DIR_FILE("assets/sounds/pong3.wav"));
     if( pong3 == NULL ) {
         std::cout<< "Failed to load scratch sound effect! SDL_mixer Error: "<<Mix_GetError();
         return 1;
@@ -628,8 +633,8 @@ int main()
 
 
     framebuffer fb(originalScreenWidth,originalScreenHeight);
-    Shader shader(WORKING_DIR_FILE("shader.vert"),WORKING_DIR_FILE("shader.frag"));
-    Shader fb_shader(WORKING_DIR_FILE("framebuffer_shader.vert"),WORKING_DIR_FILE("framebuffer_shader.frag"));
+    Shader shader(WORKING_DIR_FILE("assets/shaders/shader.vert"),WORKING_DIR_FILE("assets/shaders/shader.frag"));
+    Shader fb_shader(WORKING_DIR_FILE("assets/shaders/framebuffer_shader.vert"),WORKING_DIR_FILE("assets/shaders/framebuffer_shader.frag"));
     while(!quit)
     {
         SDL_PumpEvents();
