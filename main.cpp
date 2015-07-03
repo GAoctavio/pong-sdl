@@ -403,21 +403,17 @@ inline void destructor(T a){
 #define DESTRUCTOR(A) destructor<decltype(A)>((A))
 int main()
 {
-    char cdirectory[2048];
-    getcwd(cdirectory,2048);
-    if(cdirectory[0]=='\0'){
-        std::cout<<"coudlnt get working dir"<<std::endl;
-        return 1;
-    }
-    WORKING_DIR=cdirectory;
+    WORKING_DIR=SDL_GetBasePath();
+    WORKING_DIR=WORKING_DIR.substr(0,WORKING_DIR.find_last_of("/\\"));
     WORKING_DIR=WORKING_DIR.substr(0,WORKING_DIR.find_last_of("/\\"));
     WORKING_DIR=WORKING_DIR.substr(0,WORKING_DIR.find_last_of("/\\"));
 #ifdef __gnu_linux__
     WORKING_DIR+="/";
-#endif
-#ifdef __WIN32
+#elif __WIN32
     WORKING_DIR+="\\";
 #endif
+    std::cout<< WORKING_DIR<<std::endl;
+
     SDL_Window *mainwindow; /* Our window handle */
     SDL_GLContext maincontext; /* Our opengl context handle */
     Mix_Chunk *pong = NULL;
@@ -563,7 +559,6 @@ int main()
     glBindVertexArray(quadVAO);
         glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
             glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
-            //glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
             glEnableVertexAttribArray(0);
             glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (GLvoid*)0);
             glEnableVertexAttribArray(1);
